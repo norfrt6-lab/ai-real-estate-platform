@@ -158,13 +158,41 @@ jobs:
             mkdir -p "${DIR}"
 
             if [ "${FILE_EXT}" = "md" ]; then
-              printf '# %s\n\n> Module: `%s` | Branch: `%s`\n\n## Overview\n\nThis document covers the **%s** feature of the AI Real Estate Platform.\n\n## Status\n\n- [ ] Design\n- [ ] Implementation\n- [ ] Tests\n- [ ] Review\n\n## Notes\n\n_Implementation details to be added._\n' \
-                "${SLUG}" "${MODULE}" "${BRANCH}" "${SLUG}" > "${FILE_PATH}"
+              {
+                echo "# ${SLUG}"
+                echo ""
+                echo "Module: ${MODULE} | Branch: ${BRANCH}"
+                echo ""
+                echo "## Overview"
+                echo ""
+                echo "This document covers the ${SLUG} feature."
+                echo ""
+                echo "## Status"
+                echo ""
+                echo "- [ ] Design"
+                echo "- [ ] Implementation"
+                echo "- [ ] Tests"
+                echo "- [ ] Review"
+              } > "${FILE_PATH}"
             else
-              printf '/**\n * @module  %s\n * @feature %s\n * @branch  %s\n *\n * AI Real Estate Management Platform\n * Auto-scaffolded stub - implementation pending.\n */\n\nexport const %sConfig = {\n  module: '"'"'%s'"'"',\n  feature: '"'"'%s'"'"',\n  branch: '"'"'%s'"'"',\n  status: '"'"'scaffolded'"'"',\n} as const;\n\nexport type %sConfigType = typeof %sConfig;\n' \
-                "${MODULE}" "${SLUG}" "${BRANCH}" \
-                "${MODULE}" "${MODULE}" "${SLUG}" "${BRANCH}" \
-                "${MODULE}" "${MODULE}" > "${FILE_PATH}"
+              {
+                echo "/**"
+                echo " * @module  ${MODULE}"
+                echo " * @feature ${SLUG}"
+                echo " * @branch  ${BRANCH}"
+                echo " *"
+                echo " * AI Real Estate Platform - auto-scaffolded stub."
+                echo " */"
+                echo ""
+                echo "export const ${MODULE}Config = {"
+                echo "  module: \"${MODULE}\","
+                echo "  feature: \"${SLUG}\","
+                echo "  branch: \"${BRANCH}\","
+                echo "  status: \"scaffolded\","
+                echo "} as const;"
+                echo ""
+                echo "export type ${MODULE}ConfigType = typeof ${MODULE}Config;"
+              } > "${FILE_PATH}"
             fi
 
             git add "${FILE_PATH}"
