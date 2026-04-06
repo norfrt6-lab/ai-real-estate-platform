@@ -1,4 +1,4 @@
-name: 🏠 Real Estate Platform — Feature Development
+name: Real Estate Platform - Feature Development
 
 on:
   schedule:
@@ -11,7 +11,7 @@ on:
         default: '30'
         type: string
       run_offset:
-        description: 'Override batch offset (0-based). Leave empty to use run number.'
+        description: 'Override batch offset (0-based). Leave empty to auto-calculate.'
         required: false
         default: ''
         type: string
@@ -43,16 +43,16 @@ jobs:
           git fetch origin --prune --quiet
 
           if git ls-remote --exit-code --heads origin dev > /dev/null 2>&1; then
-            echo "✅ dev branch exists."
+            echo "dev branch exists."
             git checkout dev
             git pull origin dev --quiet
           else
-            echo "⚙️  dev branch not found — creating from main."
+            echo "dev branch not found - creating from main."
             git checkout main
             git pull origin main --quiet
             git checkout -b dev
             git push origin dev --quiet
-            echo "✅ dev branch created and pushed."
+            echo "dev branch created."
           fi
 
       - name: Create and merge feat PRs into dev
@@ -64,32 +64,29 @@ jobs:
           DATE="$(date +%Y-%m-%d)"
           RUN_NUMBER="${{ github.run_number }}"
 
-          # Allow manual offset override, otherwise derive from run number
           if [ -n "${{ github.event.inputs.run_offset }}" ]; then
             OFFSET="${{ github.event.inputs.run_offset }}"
           else
             OFFSET=$(( (RUN_NUMBER - 1) * BATCH_SIZE ))
           fi
 
-          echo "======================================================"
-          echo "  🏠 Real Estate Platform — Feature Development"
-          echo "  Date       : ${DATE}"
-          echo "  Run #      : ${RUN_NUMBER}"
-          echo "  Batch size : ${BATCH_SIZE}"
-          echo "  Offset     : ${OFFSET}"
-          echo "======================================================"
+          echo "=================================================="
+          echo "Real Estate Platform - Feature Development"
+          echo "Date       : ${DATE}"
+          echo "Run        : ${RUN_NUMBER}"
+          echo "Batch size : ${BATCH_SIZE}"
+          echo "Offset     : ${OFFSET}"
+          echo "=================================================="
 
-          # Load feature list
           FEATURES_FILE=".github/features.txt"
           if [ ! -f "${FEATURES_FILE}" ]; then
-            echo "❌ ${FEATURES_FILE} not found — aborting."
+            echo "ERROR: ${FEATURES_FILE} not found."
             exit 1
           fi
 
           mapfile -t ALL_FEATURES < "${FEATURES_FILE}"
           TOTAL=${#ALL_FEATURES[@]}
-          echo "  Total features in list: ${TOTAL}"
-          echo ""
+          echo "Total features: ${TOTAL}"
 
           SUCCESS=0
           FAIL=0
@@ -99,139 +96,96 @@ jobs:
             IDX=$(( OFFSET + i ))
 
             if [ "${IDX}" -ge "${TOTAL}" ]; then
-              echo "⚡ All ${TOTAL} features completed — nothing left to process."
+              echo "All ${TOTAL} features completed."
               SKIPPED=$(( BATCH_SIZE - i ))
               break
             fi
 
             BRANCH="${ALL_FEATURES[$IDX]}"
-            # Strip blank lines / comments
             BRANCH="$(echo "${BRANCH}" | tr -d '[:space:]')"
+
             if [ -z "${BRANCH}" ] || [[ "${BRANCH}" == \#* ]]; then
-              echo "  [SKIP] empty/comment line at index ${IDX}"
               SKIPPED=$(( SKIPPED + 1 ))
               continue
             fi
 
             echo ""
-            echo "  [$((i+1))/${BATCH_SIZE}] ${BRANCH}"
+            echo "[$((i+1))/${BATCH_SIZE}] ${BRANCH}"
 
-            # ── Derive module and slug from branch name ─────────────────────
-            # e.g. feat/auth-nextauth-config  → module=auth, slug=nextauth-config
-            # e.g. fix/payment-webhook-idempotency → module=payment, slug=webhook-idempotency
             BRANCH_BODY="${BRANCH#feat/}"
             BRANCH_BODY="${BRANCH_BODY#fix/}"
             MODULE="${BRANCH_BODY%%-*}"
             SLUG="${BRANCH_BODY#${MODULE}-}"
 
-            # Map module to src directory
             case "${MODULE}" in
-              auth)        DIR="src/features/auth" ;;
-              property)    DIR="src/features/properties" ;;
-              tenant)      DIR="src/features/tenants" ;;
-              payment|stripe) DIR="src/features/payments" ;;
-              ai)          DIR="src/features/ai" ;;
-              maintenance) DIR="src/features/maintenance" ;;
-              dashboard|analytics) DIR="src/features/dashboard" ;;
-              notification|email|push|in) DIR="src/features/notifications" ;;
-              admin)       DIR="src/features/admin" ;;
-              agent)       DIR="src/features/agents" ;;
-              storage|cloudinary|file|image) DIR="src/lib/storage" ;;
-              search)      DIR="src/features/search" ;;
-              report)      DIR="src/features/reports" ;;
-              test)        DIR="src/__tests__" ;;
-              perf)        DIR="src/lib/performance" ;;
-              devops)      DIR=".github/config" ;;
-              docs)        DIR="docs" ;;
-              fix)         DIR="src/features/${SLUG%%/*}" ;;
-              *)           DIR="src/features/${MODULE}" ;;
+              auth)                    DIR="src/features/auth" ;;
+              property)                DIR="src/features/properties" ;;
+              tenant)                  DIR="src/features/tenants" ;;
+              payment|stripe)          DIR="src/features/payments" ;;
+              ai)                      DIR="src/features/ai" ;;
+              maintenance)             DIR="src/features/maintenance" ;;
+              dashboard|analytics)     DIR="src/features/dashboard" ;;
+              notification|email|push) DIR="src/features/notifications" ;;
+              admin)                   DIR="src/features/admin" ;;
+              agent)                   DIR="src/features/agents" ;;
+              storage|cloudinary|file) DIR="src/lib/storage" ;;
+              search)                  DIR="src/features/search" ;;
+              report)                  DIR="src/features/reports" ;;
+              test)                    DIR="src/__tests__" ;;
+              perf)                    DIR="src/lib/performance" ;;
+              devops)                  DIR=".github/config" ;;
+              docs)                    DIR="docs" ;;
+              *)                       DIR="src/features/${MODULE}" ;;
             esac
 
             FILE_EXT="ts"
-            if [ "${MODULE}" = "docs" ]; then FILE_EXT="md"; fi
-            if [ "${DIR}" = ".github/config" ]; then FILE_EXT="md"; fi
+            if [ "${MODULE}" = "docs" ] || [ "${DIR}" = ".github/config" ]; then
+              FILE_EXT="md"
+            fi
 
             FILE_PATH="${DIR}/${SLUG}.${FILE_EXT}"
 
-            # ── Sync dev before branching ────────────────────────────────────
             git fetch origin dev --quiet
             git checkout dev --quiet
             git reset --hard origin/dev --quiet
 
-            # ── Create feature branch from dev ───────────────────────────────
             if ! git checkout -b "${BRANCH}" --quiet 2>&1; then
-              echo "    [WARN] Could not create branch ${BRANCH} — skipping."
+              echo "  WARN: Could not create branch ${BRANCH} - skipping."
               FAIL=$(( FAIL + 1 ))
               continue
             fi
 
-            # ── Generate stub file ───────────────────────────────────────────
             mkdir -p "${DIR}"
 
             if [ "${FILE_EXT}" = "md" ]; then
-              cat > "${FILE_PATH}" << MDEOF
-# ${SLUG}
-
-> Module: \`${MODULE}\` | Branch: \`${BRANCH}\`
-
-## Overview
-
-This document covers the **${SLUG}** feature of the AI Real Estate Platform.
-
-## Status
-
-- [ ] Design
-- [ ] Implementation
-- [ ] Tests
-- [ ] Review
-
-## Notes
-
-_Implementation details to be added._
-MDEOF
+              printf '# %s\n\n> Module: `%s` | Branch: `%s`\n\n## Overview\n\nThis document covers the **%s** feature of the AI Real Estate Platform.\n\n## Status\n\n- [ ] Design\n- [ ] Implementation\n- [ ] Tests\n- [ ] Review\n\n## Notes\n\n_Implementation details to be added._\n' \
+                "${SLUG}" "${MODULE}" "${BRANCH}" "${SLUG}" > "${FILE_PATH}"
             else
-              cat > "${FILE_PATH}" << TSEOF
-/**
- * @module  ${MODULE}
- * @feature ${SLUG}
- * @branch  ${BRANCH}
- *
- * AI Real Estate Management Platform
- * Auto-scaffolded — implementation pending.
- */
-
-export const ${MODULE}Config = {
-  module: '${MODULE}',
-  feature: '${SLUG}',
-  branch: '${BRANCH}',
-  status: 'scaffolded',
-} as const;
-
-export type ${MODULE}ConfigType = typeof ${module}Config;
-TSEOF
+              printf '/**\n * @module  %s\n * @feature %s\n * @branch  %s\n *\n * AI Real Estate Management Platform\n * Auto-scaffolded stub - implementation pending.\n */\n\nexport const %sConfig = {\n  module: '"'"'%s'"'"',\n  feature: '"'"'%s'"'"',\n  branch: '"'"'%s'"'"',\n  status: '"'"'scaffolded'"'"',\n} as const;\n\nexport type %sConfigType = typeof %sConfig;\n' \
+                "${MODULE}" "${SLUG}" "${BRANCH}" \
+                "${MODULE}" "${MODULE}" "${SLUG}" "${BRANCH}" \
+                "${MODULE}" "${MODULE}" > "${FILE_PATH}"
             fi
 
             git add "${FILE_PATH}"
-            git commit -m "${BRANCH#feat/}" --quiet 2>/dev/null \
-              || git commit -m "${BRANCH#fix/}" --quiet
 
-            # ── Push feature branch ──────────────────────────────────────────
+            COMMIT_MSG="${BRANCH#feat/}"
+            COMMIT_MSG="${COMMIT_MSG#fix/}"
+            git commit -m "${COMMIT_MSG}" --quiet
+
             if ! git push origin "${BRANCH}" --quiet 2>&1; then
-              echo "    [WARN] Push failed for ${BRANCH} — skipping."
+              echo "  WARN: Push failed for ${BRANCH} - skipping."
               git checkout dev --quiet
               git branch -D "${BRANCH}" 2>/dev/null || true
               FAIL=$(( FAIL + 1 ))
               continue
             fi
 
-            # ── Create PR: feat/* → dev ──────────────────────────────────────
             PR_TYPE="feat"
             if [[ "${BRANCH}" == fix/* ]]; then PR_TYPE="fix"; fi
 
             PR_TITLE="${PR_TYPE}: ${SLUG}"
-            PR_BODY="**Module:** \`${MODULE}\`
-**Branch:** \`${BRANCH}\`
-**Date:** ${DATE} | **Run:** #${RUN_NUMBER}
+            PR_BODY="**Module:** \`${MODULE}\`  **Branch:** \`${BRANCH}\`  **Date:** ${DATE} | **Run:** #${RUN_NUMBER}
 
 Scaffolds \`${FILE_PATH}\` for the \`${SLUG}\` feature."
 
@@ -241,36 +195,33 @@ Scaffolds \`${FILE_PATH}\` for the \`${SLUG}\` feature."
               --base dev \
               --head "${BRANCH}" 2>&1)
 
-            PR_EXIT=$?
-            if [ "${PR_EXIT}" -ne 0 ]; then
-              echo "    [WARN] PR create failed: ${PR_URL}"
+            if [ $? -ne 0 ]; then
+              echo "  WARN: PR create failed: ${PR_URL}"
               git push origin --delete "${BRANCH}" 2>/dev/null || true
               FAIL=$(( FAIL + 1 ))
               continue
             fi
 
-            echo "    PR: ${PR_URL}"
+            echo "  PR: ${PR_URL}"
 
-            # ── Merge PR: feat/* → dev ───────────────────────────────────────
             if gh pr merge "${BRANCH}" \
               --merge \
               --delete-branch \
               --subject "${PR_TITLE}" 2>&1; then
-              echo "    ✅ Merged."
+              echo "  Merged."
               SUCCESS=$(( SUCCESS + 1 ))
             else
-              echo "    [WARN] Merge failed — closing PR."
+              echo "  WARN: Merge failed - closing PR."
               gh pr close "${BRANCH}" 2>/dev/null || true
               git push origin --delete "${BRANCH}" 2>/dev/null || true
               FAIL=$(( FAIL + 1 ))
             fi
 
-            # Brief pause — avoid GitHub API rate limits
             sleep 2
           done
 
           echo ""
-          echo "  feat PRs — ✅ Merged: ${SUCCESS} | ❌ Failed: ${FAIL} | ⏭ Skipped: ${SKIPPED}"
+          echo "feat PRs - Merged: ${SUCCESS} | Failed: ${FAIL} | Skipped: ${SKIPPED}"
 
           echo "success=${SUCCESS}" >> "$GITHUB_OUTPUT"
           echo "failed=${FAIL}"     >> "$GITHUB_OUTPUT"
@@ -286,7 +237,7 @@ Scaffolds \`${FILE_PATH}\` for the \`${SLUG}\` feature."
           FEAT_SUCCESS="${{ steps.feat_prs.outputs.success || '0' }}"
 
           echo ""
-          echo "==> Checking if dev has commits ahead of main..."
+          echo "Checking if dev has commits ahead of main..."
 
           git fetch origin main --quiet
           git fetch origin dev  --quiet
@@ -294,9 +245,8 @@ Scaffolds \`${FILE_PATH}\` for the \`${SLUG}\` feature."
           DEV_AHEAD=$(git rev-list --count origin/main..origin/dev 2>/dev/null || echo "0")
 
           if [ "${DEV_AHEAD}" -gt "0" ]; then
-            echo "  dev is ${DEV_AHEAD} commit(s) ahead of main — creating release PR."
+            echo "  dev is ${DEV_AHEAD} commit(s) ahead of main - creating release PR."
 
-            # Check if a dev→main PR already exists (open)
             EXISTING_PR=$(gh pr list \
               --base main \
               --head dev \
@@ -305,22 +255,16 @@ Scaffolds \`${FILE_PATH}\` for the \`${SLUG}\` feature."
               --jq '.[0].number' 2>/dev/null || echo "")
 
             if [ -n "${EXISTING_PR}" ]; then
-              echo "  Found existing open PR #${EXISTING_PR} — merging it."
+              echo "  Found existing open PR #${EXISTING_PR} - merging it."
               gh pr merge "${EXISTING_PR}" \
                 --merge \
                 --subject "release: merge dev into main [${DATE}]" 2>&1 \
-                && echo "  ✅ dev→main merged (existing PR)." \
-                || echo "  [WARN] Could not merge existing PR #${EXISTING_PR}."
+                && echo "  dev->main merged (existing PR)." \
+                || echo "  WARN: Could not merge existing PR #${EXISTING_PR}."
             else
               PR_URL=$(gh pr create \
                 --title "release: merge dev into main [${DATE}]" \
-                --body "**Daily Release** — run #${RUN_NUMBER} | ${DATE}
-
-Merges **${FEAT_SUCCESS}** feature scaffolding PRs into \`main\`.
-
-### Summary
-- feat PRs merged into dev: ${FEAT_SUCCESS}
-- Branch: \`dev\` → \`main\`" \
+                --body "Daily release - run #${RUN_NUMBER} | ${DATE}. Merges ${FEAT_SUCCESS} feature scaffolding PRs into main." \
                 --base main \
                 --head dev 2>&1)
 
@@ -329,14 +273,14 @@ Merges **${FEAT_SUCCESS}** feature scaffolding PRs into \`main\`.
                 gh pr merge dev \
                   --merge \
                   --subject "release: merge dev into main [${DATE}]" 2>&1 \
-                  && echo "  ✅ dev→main merged successfully." \
-                  || echo "  [WARN] dev→main merge failed."
+                  && echo "  dev->main merged." \
+                  || echo "  WARN: dev->main merge failed."
               else
-                echo "  [WARN] Could not create dev→main PR: ${PR_URL}"
+                echo "  WARN: Could not create dev->main PR: ${PR_URL}"
               fi
             fi
           else
-            echo "  ℹ️  dev is already up to date with main — skipping release PR."
+            echo "  dev is already up to date with main - skipping release PR."
           fi
 
       - name: Summary
@@ -347,12 +291,12 @@ Merges **${FEAT_SUCCESS}** feature scaffolding PRs into \`main\`.
           TOTAL_TODAY=$(( FEAT_SUCCESS + 1 ))
 
           echo ""
-          echo "=============================================="
-          echo "  🏠 Real Estate Platform — Run Complete"
-          echo "  Date             : $(date +%Y-%m-%d)"
-          echo "  Run #            : ${{ github.run_number }}"
-          echo "  feat PRs merged  : ${FEAT_SUCCESS}"
-          echo "  feat PRs failed  : ${FEAT_FAILED}"
-          echo "  + release PR     : 1 (dev → main)"
-          echo "  Total today      : ~${TOTAL_TODAY}"
-          echo "=============================================="
+          echo "============================================"
+          echo "Real Estate Platform - Run Complete"
+          echo "Date            : $(date +%Y-%m-%d)"
+          echo "Run             : ${{ github.run_number }}"
+          echo "feat PRs merged : ${FEAT_SUCCESS}"
+          echo "feat PRs failed : ${FEAT_FAILED}"
+          echo "+ release PR    : 1 (dev -> main)"
+          echo "Total today     : ~${TOTAL_TODAY}"
+          echo "============================================"
