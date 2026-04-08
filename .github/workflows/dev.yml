@@ -60,6 +60,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
+          # Extract the generator script from origin/main before any branch switching
+          git fetch origin main --quiet
+          git show origin/main:.github/scripts/generate_code.py > /tmp/generate_code.py
+          echo "Generator script extracted to /tmp/generate_code.py"
+
           BATCH_SIZE="${{ github.event.inputs.batch_size || '30' }}"
           DATE="$(date +%Y-%m-%d)"
           RUN_NUMBER="${{ github.run_number }}"
@@ -158,7 +163,7 @@ jobs:
             mkdir -p "${DIR}"
 
             export BRANCH="${BRANCH}" MODULE="${MODULE}" SLUG="${SLUG}" DIR="${DIR}" FILE_PATH="${FILE_PATH}" FILE_EXT="${FILE_EXT}"
-            python3 .github/scripts/generate_code.py
+            python3 /tmp/generate_code.py
 
             git add "${FILE_PATH}"
 
