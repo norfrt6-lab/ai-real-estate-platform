@@ -157,43 +157,8 @@ jobs:
 
             mkdir -p "${DIR}"
 
-            if [ "${FILE_EXT}" = "md" ]; then
-              {
-                echo "# ${SLUG}"
-                echo ""
-                echo "Module: ${MODULE} | Branch: ${BRANCH}"
-                echo ""
-                echo "## Overview"
-                echo ""
-                echo "This document covers the ${SLUG} feature."
-                echo ""
-                echo "## Status"
-                echo ""
-                echo "- [ ] Design"
-                echo "- [ ] Implementation"
-                echo "- [ ] Tests"
-                echo "- [ ] Review"
-              } > "${FILE_PATH}"
-            else
-              {
-                echo "/**"
-                echo " * @module  ${MODULE}"
-                echo " * @feature ${SLUG}"
-                echo " * @branch  ${BRANCH}"
-                echo " *"
-                echo " * AI Real Estate Platform - auto-scaffolded stub."
-                echo " */"
-                echo ""
-                echo "export const ${MODULE}Config = {"
-                echo "  module: \"${MODULE}\","
-                echo "  feature: \"${SLUG}\","
-                echo "  branch: \"${BRANCH}\","
-                echo "  status: \"scaffolded\","
-                echo "} as const;"
-                echo ""
-                echo "export type ${MODULE}ConfigType = typeof ${MODULE}Config;"
-              } > "${FILE_PATH}"
-            fi
+            export BRANCH="${BRANCH}" MODULE="${MODULE}" SLUG="${SLUG}" DIR="${DIR}" FILE_PATH="${FILE_PATH}" FILE_EXT="${FILE_EXT}"
+            python3 .github/scripts/generate_code.py
 
             git add "${FILE_PATH}"
 
